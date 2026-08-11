@@ -1,0 +1,958 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Slate — a working system for building stories</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ground:#E6E9EC;
+    --panel:#FAFBFC;
+    --ink:#13161B;
+    --ink-2:#3A4048;
+    --muted:#6C737C;
+    --rule:#C7CDD4;
+    --rule-soft:#DDE2E7;
+    --red:#8C2F2A;
+    --teal:#245A5E;
+    --amber:#8A6512;
+
+    --display:"Barlow Condensed",Impact,sans-serif;
+    --body:"Newsreader",Georgia,serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+
+    --measure:64ch;
+    --gut:clamp(20px,4vw,48px);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:17px;
+    line-height:1.62;
+    font-weight:400;
+  }
+  @media (max-width:600px){ body{font-size:16px} }
+
+  /* ---------- clapper stripe: the signature rule ---------- */
+  .stripe{
+    height:14px;
+    background:repeating-linear-gradient(
+      -60deg,
+      var(--ink) 0 14px,
+      var(--panel) 14px 28px
+    );
+    border-block:1px solid var(--ink);
+  }
+  .stripe--thin{height:8px}
+
+  /* ---------- shell ---------- */
+  .wrap{max-width:1320px;margin:0 auto;padding:0 var(--gut)}
+
+  /* ---------- hero ---------- */
+  .hero{padding:clamp(40px,7vw,84px) 0 clamp(28px,4vw,44px)}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 18px;
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  }
+  .rec{width:8px;height:8px;border-radius:50%;background:var(--red);flex:none}
+  h1{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:clamp(52px,11vw,132px);
+    line-height:.86;
+    letter-spacing:-.015em;
+    text-transform:uppercase;
+    margin:0 0 22px;
+  }
+  h1 em{font-style:normal;color:var(--red)}
+  .standfirst{
+    max-width:52ch;
+    font-size:clamp(18px,2.2vw,22px);
+    line-height:1.5;
+    color:var(--ink-2);
+    margin:0;
+    font-weight:300;
+  }
+
+  /* ---------- runtime timeline ---------- */
+  .timeline{margin:clamp(34px,5vw,56px) 0 0}
+  .timeline-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:10px;
+    gap:16px;
+  }
+  .track{
+    display:flex;width:100%;border:1px solid var(--ink);
+    background:var(--panel);overflow:hidden;
+  }
+  .seg{
+    flex:none;
+    border-right:1px solid var(--ink);
+    padding:12px 8px 13px;
+    text-align:left;
+    background:transparent;
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-2);
+    cursor:pointer;
+    transition:background .18s ease,color .18s ease;
+    min-width:0;
+    overflow:hidden;
+    display:block;
+  }
+  .seg:last-child{border-right:0}
+  .seg b{
+    display:block;font-family:var(--display);font-size:15px;font-weight:600;
+    letter-spacing:.02em;color:var(--ink);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .seg span{opacity:.65;font-size:9px}
+  .seg:hover,.seg:focus-visible{background:var(--ink);color:var(--panel)}
+  .seg:hover b,.seg:focus-visible b{color:var(--panel)}
+  .seg--peak{background:rgba(140,47,42,.10)}
+  @media (max-width:760px){
+    .seg{padding:9px 5px}
+    .seg b{font-size:11px}
+    .seg span{display:none}
+  }
+
+  /* ---------- layout ---------- */
+  .cols{display:block;padding:clamp(36px,6vw,72px) 0 0}
+  @media (min-width:1080px){
+    .cols{display:grid;grid-template-columns:210px minmax(0,1fr);gap:clamp(40px,5vw,80px);align-items:start}
+  }
+
+  /* ---------- nav ---------- */
+  nav{margin:0 0 44px}
+  @media (min-width:1080px){
+    nav{position:sticky;top:28px;margin:0}
+  }
+  .nav-head{
+    font-family:var(--mono);font-size:10px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--muted);
+    padding-bottom:10px;border-bottom:1px solid var(--rule);margin-bottom:6px;
+  }
+  .nav-list{list-style:none;margin:0;padding:0;
+    display:flex;flex-wrap:wrap;gap:2px 0}
+  @media (min-width:1080px){.nav-list{display:block}}
+  .nav-list a{
+    display:block;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.03em;
+    color:var(--ink-2);text-decoration:none;
+    padding:6px 10px 6px 0;
+    border-bottom:1px solid transparent;
+    transition:color .15s ease;
+  }
+  @media (max-width:1079px){
+    .nav-list a{padding:5px 14px 5px 0}
+  }
+  .nav-list a:hover{color:var(--red)}
+  .nav-list a.on{color:var(--red);font-weight:600}
+  .nav-list a .n{color:var(--muted);margin-right:8px}
+  .nav-list a.on .n{color:var(--red)}
+
+  /* ---------- sections ---------- */
+  section{margin:0 0 clamp(56px,8vw,96px);scroll-margin-top:24px}
+  .sec-head{
+    display:flex;gap:16px;align-items:flex-start;
+    border-top:2px solid var(--ink);padding-top:14px;margin-bottom:26px;
+  }
+  .sec-num{
+    font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.1em;
+    color:var(--red);padding-top:9px;flex:none;
+  }
+  h2{
+    font-family:var(--display);font-weight:700;
+    font-size:clamp(30px,5vw,46px);line-height:1;letter-spacing:-.005em;
+    text-transform:uppercase;margin:0;
+  }
+  .sec-sub{
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);margin:7px 0 0;
+  }
+
+  p{max-width:var(--measure);margin:0 0 18px}
+  h3{
+    font-family:var(--display);font-weight:600;text-transform:uppercase;
+    font-size:22px;letter-spacing:.02em;margin:38px 0 14px;
+  }
+  strong{font-weight:600}
+  .lede{font-size:19px;color:var(--ink-2);font-weight:300;max-width:58ch}
+
+  /* ---------- definition card ---------- */
+  .def{
+    background:var(--panel);
+    border:1px solid var(--ink);
+    margin:0 0 22px;
+    max-width:var(--measure);
+  }
+  .def-term{
+    font-family:var(--mono);font-size:10.5px;font-weight:600;
+    letter-spacing:.2em;text-transform:uppercase;
+    background:var(--ink);color:var(--panel);
+    padding:7px 14px;
+  }
+  .def-body{padding:18px 20px 6px}
+  .def-body p{margin-bottom:14px}
+  .def-main{
+    font-size:20px;line-height:1.42;font-weight:500;
+    max-width:46ch;
+  }
+  .def-line{
+    display:grid;grid-template-columns:52px minmax(0,1fr);
+    gap:12px;align-items:baseline;
+    border-top:1px solid var(--rule-soft);
+    padding:12px 0;margin:0;max-width:none;
+  }
+  .def-line:last-child{padding-bottom:16px}
+  .tag{
+    font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;padding-top:4px;
+  }
+  .tag--no{color:var(--red)}
+  .tag--test{color:var(--teal)}
+  .tag--use{color:var(--amber)}
+  .def-line div{font-size:16px;line-height:1.55}
+
+  /* ---------- generic list ---------- */
+  .rows{max-width:var(--measure);margin:0 0 24px;border-top:1px solid var(--rule)}
+  .row{
+    display:grid;grid-template-columns:minmax(115px,150px) minmax(0,1fr);
+    gap:8px 20px;padding:14px 0;border-bottom:1px solid var(--rule-soft);
+  }
+  @media (max-width:560px){
+    .row{grid-template-columns:1fr;gap:3px}
+  }
+  .row dt{
+    font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink);padding-top:3px;
+  }
+  .row dd{margin:0;font-size:16px;line-height:1.55}
+  .row dd em{font-style:italic;color:var(--muted)}
+  dl{margin:0}
+
+  /* ---------- chain ---------- */
+  .chain{
+    display:flex;flex-wrap:wrap;gap:7px;align-items:center;
+    margin:0 0 24px;max-width:var(--measure);
+  }
+  .chain b{
+    font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.06em;
+    text-transform:uppercase;background:var(--panel);
+    border:1px solid var(--ink);padding:6px 10px;
+  }
+  .chain b.hot{background:var(--ink);color:var(--panel)}
+  .chain i{color:var(--muted);font-style:normal;font-family:var(--mono);font-size:12px}
+
+  /* ---------- pull ---------- */
+  .pull{
+    border-left:3px solid var(--red);
+    padding:4px 0 4px 20px;margin:26px 0;max-width:56ch;
+    font-size:19px;line-height:1.5;font-weight:500;
+  }
+  .pull span{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--red);margin-bottom:8px;font-weight:600}
+
+  /* ---------- beat (structure parts) ---------- */
+  .beat{
+    border-top:1px solid var(--rule);
+    padding:22px 0 4px;max-width:var(--measure);
+  }
+  .beat-head{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-bottom:12px}
+  .beat-n{
+    font-family:var(--mono);font-size:11px;font-weight:600;color:var(--panel);
+    background:var(--ink);width:22px;height:22px;display:grid;place-items:center;flex:none;
+  }
+  .beat-name{font-family:var(--display);font-weight:700;text-transform:uppercase;
+    font-size:26px;letter-spacing:.01em;line-height:1}
+  .beat-pct{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);
+    margin-left:auto;padding-top:4px}
+  .beat p{margin-bottom:12px}
+  .beat .def-line{border-top:1px solid var(--rule-soft)}
+
+  /* ---------- table ---------- */
+  .tbl{width:100%;border-collapse:collapse;margin:0 0 24px;max-width:var(--measure);
+    font-size:15.5px}
+  .tbl th{
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    text-align:left;padding:0 14px 9px 0;color:var(--muted);font-weight:600;
+    border-bottom:1px solid var(--ink);
+  }
+  .tbl td{padding:12px 14px 12px 0;border-bottom:1px solid var(--rule-soft);
+    vertical-align:top;line-height:1.5}
+  .tbl td:first-child{font-weight:500;width:31%}
+  .tbl .fix{color:var(--teal)}
+  @media (max-width:620px){
+    .tbl,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%}
+    .tbl thead{display:none}
+    .tbl tr{border-bottom:1px solid var(--ink);padding:14px 0}
+    .tbl td{border:0;padding:2px 0}
+    .tbl td:first-child{width:auto;font-family:var(--display);text-transform:uppercase;
+      font-size:19px;font-weight:700;margin-bottom:5px}
+    .tbl td[data-l]::before{content:attr(data-l);font-family:var(--mono);font-size:9px;
+      letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-top:7px}
+  }
+
+  /* ---------- registers ---------- */
+  .regs{display:grid;gap:1px;background:var(--rule);border:1px solid var(--ink);
+    max-width:var(--measure);margin:0 0 24px;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .reg{background:var(--panel);padding:14px 16px}
+  .reg b{font-family:var(--display);text-transform:uppercase;font-size:19px;
+    font-weight:700;display:block;letter-spacing:.02em}
+  .reg span{font-size:14.5px;line-height:1.45;color:var(--ink-2);display:block;margin-top:3px}
+
+  /* ---------- the slate form ---------- */
+  .slate{
+    border:2px solid var(--ink);background:var(--panel);
+    max-width:760px;margin:0 0 20px;
+  }
+  .slate-top{
+    background:var(--ink);color:var(--panel);
+    padding:12px 18px;display:flex;justify-content:space-between;
+    align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .slate-top b{font-family:var(--display);font-size:22px;text-transform:uppercase;
+    letter-spacing:.06em;font-weight:700}
+  .slate-top span{font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;opacity:.7}
+  .fields{display:grid;grid-template-columns:1fr 1fr}
+  @media (max-width:700px){.fields{grid-template-columns:1fr}}
+  .f{border-bottom:1px solid var(--rule);border-right:1px solid var(--rule);padding:12px 16px 13px}
+  .f:nth-child(even){border-right:0}
+  @media (max-width:700px){.f{border-right:0}}
+  .f--wide{grid-column:1/-1;border-right:0}
+  .f label{
+    display:block;font-family:var(--mono);font-size:9.5px;font-weight:600;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;
+  }
+  .f label i{font-style:normal;color:var(--red)}
+  .f .hint{font-size:13px;color:var(--muted);line-height:1.4;margin:0 0 7px;max-width:none;
+    font-style:italic}
+  .f input,.f textarea{
+    width:100%;border:0;border-bottom:1px solid var(--rule);background:transparent;
+    font-family:var(--body);font-size:16px;color:var(--ink);padding:3px 0 5px;
+    resize:vertical;line-height:1.5;
+  }
+  .f input:focus,.f textarea:focus{outline:0;border-bottom-color:var(--red)}
+  .f textarea{min-height:46px}
+  .slate-actions{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 34px}
+  button.act{
+    font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;padding:11px 18px;cursor:pointer;
+    border:1px solid var(--ink);background:var(--ink);color:var(--panel);
+    transition:background .15s ease,color .15s ease;
+  }
+  button.act.ghost{background:transparent;color:var(--ink)}
+  button.act:hover{background:var(--red);border-color:var(--red);color:#fff}
+
+  /* ---------- footer ---------- */
+  footer{padding:36px 0 60px;border-top:2px solid var(--ink);margin-top:20px}
+  footer p{font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted);max-width:60ch}
+
+  a{color:var(--red)}
+  :focus-visible{outline:2px solid var(--red);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;scroll-behavior:auto!important}
+  }
+  html{scroll-behavior:smooth}
+
+  @media print{
+    body{background:#fff;font-size:11pt}
+    nav,.timeline,.slate-actions,.stripe{display:none}
+    .cols{display:block}
+    section{page-break-inside:avoid}
+  }
+</style>
+
+<div class="stripe"></div>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow"><span class="rec"></span> Working reference · Version 1 · Clean slate</p>
+    <h1>The<br>Slate<em>.</em></h1>
+    <p class="standfirst">Every part of a story, defined so you can test for it — and a fill-in sheet for laying out any story, from a sixty-second clip to a feature.</p>
+
+    <div class="timeline">
+      <div class="timeline-label"><span>Runtime map</span><span>Percentages are proportion, not prescription</span></div>
+      <div class="track" id="track">
+        <button class="seg" style="flex-basis:12%" data-go="#s9">01 <b>Setup</b><span>0–12%</span></button>
+        <button class="seg" style="flex-basis:8%" data-go="#s9">02 <b>Break</b><span>12%</span></button>
+        <button class="seg" style="flex-basis:12%" data-go="#s9">03 <b>Commit</b><span>~25%</span></button>
+        <button class="seg" style="flex-basis:38%" data-go="#s9">04 <b>Escalation</b><span>25–70%</span></button>
+        <button class="seg seg--peak" style="flex-basis:12%" data-go="#s9">05 <b>Collapse</b><span>70–80%</span></button>
+        <button class="seg seg--peak" style="flex-basis:13%" data-go="#s9">06 <b>Climax</b><span>85–95%</span></button>
+        <button class="seg" style="flex-basis:5%" data-go="#s9">07 <b>End</b><span>5%</span></button>
+      </div>
+    </div>
+  </header>
+</div>
+
+<div class="stripe stripe--thin"></div>
+
+<div class="wrap">
+<div class="cols">
+
+  <nav>
+    <div class="nav-head">Contents</div>
+    <ul class="nav-list">
+      <li><a href="#s1"><span class="n">01</span>Story</a></li>
+      <li><a href="#s2"><span class="n">02</span>Character</a></li>
+      <li><a href="#s3"><span class="n">03</span>Motivation</a></li>
+      <li><a href="#s4"><span class="n">04</span>Conflict</a></li>
+      <li><a href="#s5"><span class="n">05</span>Drama</a></li>
+      <li><a href="#s6"><span class="n">06</span>Emotion</a></li>
+      <li><a href="#s7"><span class="n">07</span>Truth</a></li>
+      <li><a href="#s8"><span class="n">08</span>Arc</a></li>
+      <li><a href="#s9"><span class="n">09</span>The seven parts</a></li>
+      <li><a href="#s10"><span class="n">10</span>The slate</a></li>
+      <li><a href="#s11"><span class="n">11</span>Diagnostics</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+  <!-- 01 STORY -->
+  <section id="s1">
+    <div class="sec-head">
+      <div class="sec-num">01</div>
+      <div><h2>Story</h2><p class="sec-sub">What separates a story from a thing that happened</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Story</div>
+      <div class="def-body">
+        <p class="def-main">A story is the record of what someone paid to get what they wanted.</p>
+        <div class="def-line"><span class="tag tag--no">Not</span><div>A sequence of events. An interesting situation. A thing that happened to you that felt significant at the time.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Remove the character's inner life and leave the events. Does it still work? Then it's a report, not a story.</div></div>
+      </div>
+    </div>
+
+    <p>Three words get used interchangeably and shouldn't be. Keeping them apart is the difference between diagnosing a problem and guessing at it.</p>
+
+    <dl class="rows">
+      <div class="row"><dt>Narrative</dt><dd>Events in sequence. <em>This, then this.</em></dd></div>
+      <div class="row"><dt>Plot</dt><dd>Events in causal order. <em>This, therefore this.</em></dd></div>
+      <div class="row"><dt>Story</dt><dd>A plot that changes someone, and argues something about being alive.</dd></div>
+    </dl>
+
+    <p>E. M. Forster's demonstration is still the cleanest one available: <em>the king died and then the queen died</em> is narrative. <em>The king died, and then the queen died of grief</em> is plot. Two words of causation convert a list into a machine.</p>
+
+    <div class="pull">
+      <span>Minimum viable story</span>
+      Someone wants something. Something stands in the way. What they do about it changes who they are.
+    </div>
+
+    <h3>Plot is a selection, not a recording</h3>
+    <p>Most of what happened is not in the plot. Plot is only the events that force a choice. This is the single most useful thing to remember when you're working from real life, where everything has equal weight until you decide otherwise.</p>
+
+    <div class="def">
+      <div class="def-term">Scene test</div>
+      <div class="def-body">
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Does someone make a decision here they can't take back? If no, it isn't a plot beat. It's texture — useful, but it can't carry weight.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 CHARACTER -->
+  <section id="s2">
+    <div class="sec-head">
+      <div class="sec-num">02</div>
+      <div><h2>Character</h2><p class="sec-sub">Revealed by choice, never by description</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Character</div>
+      <div class="def-body">
+        <p class="def-main">Character is what a person does when the right choice costs them something.</p>
+        <div class="def-line"><span class="tag tag--no">Not</span><div>A list of traits, a backstory, a personality type, or a description of how someone comes across.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Name a choice they made that cost them. Can't? Then you have a description, not a character.</div></div>
+      </div>
+    </div>
+
+    <p>There are two layers, and confusing them is why so many characters feel vivid on the page and hollow in the room.</p>
+
+    <dl class="rows">
+      <div class="row"><dt>Characterization</dt><dd>The surface. Job, voice, clothes, habits, the way they hold a cup. Everyone can observe it. It is <strong>not</strong> character — it's the packaging.</dd></div>
+      <div class="row"><dt>True character</dt><dd>Revealed only by choice under pressure. Invisible until something is at stake. The deeper the pressure, the deeper the revelation.</dd></div>
+    </dl>
+
+    <p>This is why "she's brave" is worthless and "she went back in" is everything. Pressure is the only instrument that reads true character, which is also why comfortable characters are boring — there's no signal.</p>
+
+    <h3>Displacement</h3>
+
+    <div class="def">
+      <div class="def-term">Displacement</div>
+      <div class="def-body">
+        <p class="def-main">The character is somewhere they don't belong.</p>
+        <div class="def-line"><span class="tag tag--use">Why</span><div>It generates friction continuously, with no event required. A character who is permanently a stranger is under low-grade pressure in every scene — which means every scene can reveal something.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Where is this person a stranger? Physically, socially, in their role, in time, or inside their own life?</div></div>
+      </div>
+    </div>
+
+    <dl class="rows">
+      <div class="row"><dt>Physical</dt><dd>A new city. A room that isn't theirs.</dd></div>
+      <div class="row"><dt>Social</dt><dd>The table where everyone is more senior, richer, more fluent.</dd></div>
+      <div class="row"><dt>Role</dt><dd>Holding a position they don't believe they've earned.</dd></div>
+      <div class="row"><dt>Temporal</dt><dd>They've outgrown a place but haven't left it.</dd></div>
+      <div class="row"><dt>Internal</dt><dd>They don't belong in their own life anymore.</dd></div>
+    </dl>
+  </section>
+
+  <!-- 03 MOTIVATION -->
+  <section id="s3">
+    <div class="sec-head">
+      <div class="sec-num">03</div>
+      <div><h2>Motivation</h2><p class="sec-sub">Why the character can't simply stop</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Motivation</div>
+      <div class="def-body">
+        <p class="def-main">Motivation is the reason walking away isn't available.</p>
+        <div class="def-line"><span class="tag tag--no">Not</span><div>A goal. A goal is what they're heading toward; motivation is what makes stopping impossible.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Ask why they don't quit. If the honest answer is "they could, easily," the pursuit has no engine.</div></div>
+      </div>
+    </div>
+
+    <p>Motivation has four parts. Remove any one and the pursuit collapses into a hobby.</p>
+
+    <dl class="rows">
+      <div class="row"><dt>1 · Want</dt><dd>The external objective. Concrete, visible, winnable or losable. <em>Drives the plot.</em> "Get the job." "Finish the film." "Be taken seriously by that room."</dd></div>
+      <div class="row"><dt>2 · Misbelief</dt><dd>A past experience taught them a false rule about how to be safe, loved, or worth something. <strong>The want is usually a strategy the misbelief invented.</strong> <em>Drives everything underneath.</em></dd></div>
+      <div class="row"><dt>3 · Need</dt><dd>What would actually make them whole. Usually unknown to them, and usually in direct conflict with the want. <em>Drives the arc.</em></dd></div>
+      <div class="row"><dt>4 · Stakes</dt><dd>What is lost on failure. Specific and personal. Not "everything falls apart" — "he loses the one person who still believes he's honest."</dd></div>
+    </dl>
+
+    <p>And one modifier that decides whether any of it has pressure:</p>
+
+    <dl class="rows">
+      <div class="row"><dt>Urgency</dt><dd>Why today, and not any other day? A story that could have happened next month instead has no clock, and without a clock the character is just idling in their situation.</dd></div>
+    </dl>
+
+    <h3>The chain</h3>
+    <div class="chain">
+      <b>Wound</b><i>→</i><b>Misbelief</b><i>→</i><b>Want</b><i>→</i><b>Pursuit</b><i>→</i><b class="hot">Conflict</b><i>→</i><b class="hot">Cost</b><i>→</i><b>Recognition</b><i>→</i><b>Need met — or refused</b><i>→</i><b>Change</b>
+    </div>
+
+    <p>Read it backwards to build it: decide what change you want to prove, then work out what would have to be recognised, then what it would cost, then what could impose that cost, then what want would walk them into it, then what false rule generated that want.</p>
+
+    <div class="pull">
+      <span>The sharpest question in this whole document</span>
+      What would they have to admit for the want to disappear? That answer is the need — and the story is the process of making them admit it.
+    </div>
+  </section>
+
+  <!-- 04 CONFLICT -->
+  <section id="s4">
+    <div class="sec-head">
+      <div class="sec-num">04</div>
+      <div><h2>Conflict</h2><p class="sec-sub">Opposition, restraint, escalation</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Conflict</div>
+      <div class="def-body">
+        <p class="def-main">Conflict is the collision of two forces that cannot both win.</p>
+        <div class="def-line"><span class="tag tag--no">Not</span><div>Obstacles. An obstacle delays; conflict opposes. A traffic jam is not conflict. A traffic jam is conflict only when someone chose to send you that way.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Can you argue the other side convincingly? If the opposition is stupid, or evil for no reason, you have an obstacle wearing a face.</div></div>
+      </div>
+    </div>
+
+    <p>Name both forces explicitly. If you can only name one, you have a complaint.</p>
+
+    <h3>Three levels</h3>
+    <p>The strongest stories run all three at once, and the three <em>mirror</em> each other — the fight outside is the same shape as the fight inside.</p>
+
+    <dl class="rows">
+      <div class="row"><dt>Inner</dt><dd>Self against self. Two things they want that can't both be had. The most portable level, and the only one that's always available.</dd></div>
+      <div class="row"><dt>Personal</dt><dd>Against someone whose want is legitimate and incompatible. Note <em>legitimate</em> — villains who simply enjoy being wrong produce no tension.</dd></div>
+      <div class="row"><dt>External</dt><dd>Against a system, a place, a scarcity, or time itself.</dd></div>
+    </dl>
+
+    <h3>Restraint</h3>
+    <p>This is the part almost everyone leaves out, and it's the part that produces tension.</p>
+
+    <div class="def">
+      <div class="def-term">Restraint</div>
+      <div class="def-body">
+        <p class="def-main">Restraint is whatever prevents the easy solution.</p>
+        <div class="def-line"><span class="tag tag--use">Why</span><div>Conflict without restraint resolves in ten seconds — the character just fixes it. Tension is conflict held shut.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>"Why don't they just fix it?" The answer is the restraint. If the answer is "they could, they just haven't got round to it," there's no story yet.</div></div>
+      </div>
+    </div>
+
+    <dl class="rows">
+      <div class="row"><dt>Imposed</dt><dd>Money, distance, time, obligation, a physical limit, a rule they can't break. <em>Reveals the world.</em></dd></div>
+      <div class="row"><dt>Chosen</dt><dd>A principle, a promise, pride, something they refuse to do. <em>Reveals the character</em> — which makes it the more interesting kind.</dd></div>
+    </dl>
+
+    <div class="pull">
+      <span>Tension formula</span>
+      Tension = restraint × time held. Break the restraint early and the middle doesn't sag — it's empty, because the pressure was already spent.
+    </div>
+
+    <h3>Escalation</h3>
+    <p>Every attempt to solve the problem must make it worse, or cost more, or both. The opposition should get <em>smarter</em>, not merely bigger — bigger is volume, smarter is pressure.</p>
+
+    <div class="def">
+      <div class="def-term">Escalation test</div>
+      <div class="def-body">
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Try reordering your middle scenes. If nothing breaks, you have episodes, not escalation. In a real escalation, scene four is impossible before scene three.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 DRAMA -->
+  <section id="s5">
+    <div class="sec-head">
+      <div class="sec-num">05</div>
+      <div><h2>Drama</h2><p class="sec-sub">And why it isn't the same as intensity</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Drama</div>
+      <div class="def-body">
+        <p class="def-main">Drama is unresolved consequence: we care about someone, something matters to them, and the outcome is genuinely in doubt.</p>
+        <div class="def-line"><span class="tag tag--no">Not</span><div>Shouting, weeping, or intensity. Those are symptoms that may or may not indicate the condition.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Remove all three ingredients one at a time. Whichever removal the scene survives, you didn't have.</div></div>
+      </div>
+    </div>
+
+    <p>The cleanest way to hold the distinction between drama and melodrama:</p>
+
+    <dl class="rows">
+      <div class="row"><dt>Drama</dt><dd>The stakes exceed the display. A man says "fine" and it costs him everything.</dd></div>
+      <div class="row"><dt>Melodrama</dt><dd>The display exceeds the stakes. A man weeps and we don't yet know why it matters, so we watch the weeping instead of feeling it.</dd></div>
+    </dl>
+
+    <h3>Three kinds of not-knowing</h3>
+    <p>These are not interchangeable, and most flat work is flat because it only ever reaches for the first one.</p>
+
+    <dl class="rows">
+      <div class="row"><dt>Surprise</dt><dd>The audience finds out when the character does. Cheap, effective for about two seconds, and unrepeatable.</dd></div>
+      <div class="row"><dt>Suspense</dt><dd>The audience knows <em>more</em> than the character. Expensive to set up, and it pays for minutes. Hitchcock's example: a bomb exploding under a table buys ten seconds of shock; letting the audience know it's there buys ten minutes of agony.</dd></div>
+      <div class="row"><dt>Tension</dt><dd>Stakes known, outcome uncertain, resolution deliberately withheld. This is the one restraint produces.</dd></div>
+    </dl>
+  </section>
+
+  <!-- 06 EMOTION -->
+  <section id="s6">
+    <div class="sec-head">
+      <div class="sec-num">06</div>
+      <div><h2>Emotion</h2><p class="sec-sub">Arranged, not performed</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Emotion</div>
+      <div class="def-body">
+        <p class="def-main">Emotion is produced by arrangement, not by performance.</p>
+        <div class="def-line"><span class="tag tag--use">Why</span><div>You never transmit a feeling. You assemble the causes, show the visible effects, and the feeling occurs in the audience. This is the useful core of the Sanskrit <em>rasa</em> theory: the flavour arises in the viewer, never in the work.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>If you've told the audience what to feel, you've replaced the arrangement with an instruction — and instructions don't move anyone.</div></div>
+      </div>
+    </div>
+
+    <p>Two rules do most of the work here.</p>
+
+    <dl class="rows">
+      <div class="row"><dt>Inverse rule</dt><dd>What the character shows and what the audience feels are often opposite. A character holding it together devastates a room. A character sobbing does the feeling <em>for</em> us, and we feel less.</dd></div>
+      <div class="row"><dt>One register</dt><dd>Pick one dominant emotional register per piece and shade it with passing ones. Two dominants make a piece feel tonally broken, and the fix is always to demote one to a passing note.</dd></div>
+    </dl>
+
+    <h3>The palette</h3>
+    <p>Eight registers worth knowing by what they <em>do</em> to an audience, rather than by what they're called.</p>
+
+    <div class="regs">
+      <div class="reg"><b>Wonder</b><span>Opens a curiosity gap. The strongest opening move there is.</span></div>
+      <div class="reg"><b>Courage</b><span>Makes people want to act. For effort, discipline, starting over.</span></div>
+      <div class="reg"><b>Sorrow</b><span>The strongest bonding register. Loss, failure, what can't be fixed.</span></div>
+      <div class="reg"><b>Humour</b><span>Lowers defences, travels furthest. Weak on its own — needs something underneath it.</span></div>
+      <div class="reg"><b>Longing</b><span>Beauty, devotion, the thing just out of reach.</span></div>
+      <div class="reg"><b>Anger</b><span>Highest engagement, highest risk. Only works when a principle earns it.</span></div>
+      <div class="reg"><b>Fear</b><span>Establishes stakes. Aim it at "what I was afraid of," never at the audience.</span></div>
+      <div class="reg"><b>Peace</b><span>A terrible opening and an unbeatable close.</span></div>
+    </div>
+
+    <p>One rule about the last one: peace has to be <em>earned</em>. If the restraint was imposed and still stands at the end, a calm resolution is a lie the audience will feel without being able to name. Sorrow or courage are the honest closes there.</p>
+  </section>
+
+  <!-- 07 TRUTH -->
+  <section id="s7">
+    <div class="sec-head">
+      <div class="sec-num">07</div>
+      <div><h2>Truth</h2><p class="sec-sub">The claim the ending proves</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Truth</div>
+      <div class="def-body">
+        <p class="def-main">The truth is the claim about human life that the story demonstrates — and could have failed to demonstrate.</p>
+        <div class="def-line"><span class="tag tag--no">Not</span><div>A moral or a message. A moral is stated by someone; a truth is proved by what the ending costs and rewards.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>Write it as a sentence that could be false. If no reasonable person could disagree with it, it's a platitude, and platitudes are unfalsifiable by design.</div></div>
+      </div>
+    </div>
+
+    <p>Good: <em>"People who chase respect become unable to accept it."</em> Someone could argue with that. Bad: <em>"Family is important."</em> Nobody can.</p>
+
+    <p>The truth lives in the climax, not in the dialogue. Whatever the character chooses at the point of maximum pressure is what the story is arguing is true about people. If you want to change the theme, change the choice — not the speech.</p>
+
+    <h3>Finding it from real material</h3>
+    <p>An event isn't a story until it proves something. Say what happened, then ask <em>so what?</em> three times. The third answer is usually the actual subject.</p>
+
+    <div class="rows">
+      <div class="row"><dt>Event</dt><dd>The rickshaw broke down; I was forty minutes late.</dd></div>
+      <div class="row"><dt>So what?</dt><dd>I rehearsed excuses the whole way there.</dd></div>
+      <div class="row"><dt>So what?</dt><dd>I've built an identity around being reliable.</dd></div>
+      <div class="row"><dt>So what?</dt><dd><strong>I'm not disciplined — I'm frightened of looking careless. From outside, those two are identical.</strong></dd></div>
+    </div>
+
+    <p>That last line is the story. The rickshaw is just the thing that made it visible on a Tuesday.</p>
+  </section>
+
+  <!-- 08 ARC -->
+  <section id="s8">
+    <div class="sec-head">
+      <div class="sec-num">08</div>
+      <div><h2>Character arc</h2><p class="sec-sub">How a belief changes under pressure</p></div>
+    </div>
+
+    <div class="def">
+      <div class="def-term">Arc</div>
+      <div class="def-body">
+        <p class="def-main">An arc is the sequence by which a controlling belief is changed by pressure.</p>
+        <div class="def-line"><span class="tag tag--no">Not</span><div>Growth, or getting better at things, or announcing that you've learned something.</div></div>
+        <div class="def-line"><span class="tag tag--test">Test</span><div>An arc is proved by an action they could not have taken at the start. Saying "I've changed" is not an arc — it's a claim.</div></div>
+      </div>
+    </div>
+
+    <h3>Six stages</h3>
+    <dl class="rows">
+      <div class="row"><dt>1 · It works</dt><dd>The misbelief is operating, and it appears to be serving them.</dd></div>
+      <div class="row"><dt>2 · It's tested</dt><dd>First small cost. Easy to dismiss.</dd></div>
+      <div class="row"><dt>3 · They double down</dt><dd>Same strategy, more effort. <strong>This is the middle of your story.</strong></dd></div>
+      <div class="row"><dt>4 · It fails</dt><dd>Everything built on the misbelief comes apart at once.</dd></div>
+      <div class="row"><dt>5 · The choice</dt><dd>Abandon the belief, or keep it and pay.</dd></div>
+      <div class="row"><dt>6 · The proof</dt><dd>An action impossible for them in stage one.</dd></div>
+    </dl>
+
+    <h3>Three shapes</h3>
+    <table class="tbl">
+      <thead><tr><th>Shape</th><th>Movement</th><th>Feels like</th></tr></thead>
+      <tbody>
+        <tr><td>Positive</td><td data-l="Movement">Misbelief → truth. They change.</td><td data-l="Feels like">Satisfying. The default, and the one at most risk of being predictable.</td></tr>
+        <tr><td>Negative</td><td data-l="Movement">Misbelief → deeper misbelief.</td><td data-l="Feels like">Corruption or tragedy. Uncomfortable, and far more memorable.</td></tr>
+        <tr><td>Flat</td><td data-l="Movement">They already hold the truth; the world changes around them.</td><td data-l="Feels like">The natural shape for teaching, advocacy, and any story where the protagonist is the steady thing. Badly underused.</td></tr>
+      </tbody>
+    </table>
+
+    <p>One more shape worth knowing because real life produces it constantly: <strong>the belief changes but the situation doesn't.</strong> They're in the same room, the same job, the same city — and they see it differently. It's quieter than the others and it's often the truest.</p>
+  </section>
+
+  <!-- 09 STRUCTURE -->
+  <section id="s9">
+    <div class="sec-head">
+      <div class="sec-num">09</div>
+      <div><h2>The seven parts</h2><p class="sec-sub">Beginning · break · commitment · middle · collapse · climax · end</p></div>
+    </div>
+
+    <p class="lede">Percentages are proportions, not rules. They scale: a ninety-second video and a two-hour film have the same shape, and the same failure points.</p>
+
+    <div class="beat">
+      <div class="beat-head"><span class="beat-n">1</span><span class="beat-name">Setup</span><span class="beat-pct">0–12%</span></div>
+      <p>Establish the normal that already contains the flaw. Show what they want, what's missing, and what they'll refuse to do about it. Plant the stakes and the restraint here so you never have to explain them later.</p>
+      <div class="def-line"><span class="tag tag--use">Job</span><div>Make the audience want something on the character's behalf — through their desire, their competence, or their vulnerability. Any one will do; all three is a lot.</div></div>
+      <div class="def-line"><span class="tag tag--no">Fails</span><div>Explaining the world before giving anyone a reason to care about it.</div></div>
+    </div>
+
+    <div class="beat">
+      <div class="beat-head"><span class="beat-n">2</span><span class="beat-name">The break</span><span class="beat-pct">~12%</span></div>
+      <p>The inciting event. Equilibrium ends. The measure is not size — it's <strong>irreversibility</strong>. A sentence someone says that can't be unheard is a break; a spectacular day that changes nothing is not.</p>
+      <div class="def-line"><span class="tag tag--use">Job</span><div>Pose the dramatic question the rest of the story answers. <em>Will he get it? Will she admit it? Will they make it back?</em></div></div>
+      <div class="def-line"><span class="tag tag--no">Fails</span><div>Drama that leaves the situation exactly where it was.</div></div>
+    </div>
+
+    <div class="beat">
+      <div class="beat-head"><span class="beat-n">3</span><span class="beat-name">Commitment</span><span class="beat-pct">~25%</span></div>
+      <p>The character chooses to pursue. Usually after a refusal — the refusal is what proves the misbelief has real grip. Then the door shuts and normal stops being available.</p>
+      <div class="def-line"><span class="tag tag--use">Job</span><div>Convert a want into an active pursuit, by the character's own decision.</div></div>
+      <div class="def-line"><span class="tag tag--no">Fails</span><div>The character is carried along by events and never actually chooses. Passive protagonists are the most common structural fault there is.</div></div>
+    </div>
+
+    <div class="beat">
+      <div class="beat-head"><span class="beat-n">4</span><span class="beat-name">Escalation</span><span class="beat-pct">25–70%</span></div>
+      <p>The longest stretch, and where most stories die. Attempts fail in ways that make things worse. The opposition adapts. The restraint holds. Somewhere near the centre, a <strong>midpoint</strong> arrives that reframes the goal or flips the character from reacting to acting.</p>
+      <div class="def-line"><span class="tag tag--use">Job</span><div>Spend the character's options one at a time, so that by the end only the expensive one remains.</div></div>
+      <div class="def-line"><span class="tag tag--no">Fails</span><div>Repetition dressed as escalation — the same setback three times at the same volume.</div></div>
+    </div>
+
+    <div class="beat">
+      <div class="beat-head"><span class="beat-n">5</span><span class="beat-name">Collapse</span><span class="beat-pct">70–80%</span></div>
+      <p>The misbelief fails completely. Everything built on the old strategy comes apart, and the character is at maximum pressure — which is precisely why this is where true character becomes readable.</p>
+      <div class="def-line"><span class="tag tag--use">Job</span><div>Produce the <strong>crisis</strong>: a real dilemma. The best ones are between two goods or two evils, never between good and evil — that isn't a dilemma, it's an exam with an obvious answer.</div></div>
+      <div class="def-line"><span class="tag tag--no">Fails</span><div>A setback the character absorbs without it costing anything.</div></div>
+    </div>
+
+    <div class="beat">
+      <div class="beat-head"><span class="beat-n">6</span><span class="beat-name">Climax</span><span class="beat-pct">85–95%</span></div>
+      <p><strong>The climax is a decision, not an explosion.</strong> The explosion is optional and always has been. This is the moment the character answers the dramatic question with an action, and in doing so tells us what the story believes.</p>
+      <div class="def-line"><span class="tag tag--use">Job</span><div>Four requirements, all mandatory: the protagonist acts rather than being rescued; the choice costs; it's a choice impossible for them in the setup; and it settles the question for good.</div></div>
+      <div class="def-line"><span class="tag tag--no">Fails</span><div>Someone else solves it. A coincidence solves it. Or nothing is given up, which means nothing was ever really at risk.</div></div>
+    </div>
+
+    <div class="beat">
+      <div class="beat-head"><span class="beat-n">7</span><span class="beat-name">The end</span><span class="beat-pct">last 5%</span></div>
+      <p>Show the new normal — that's the proof the change is real. Show the price. Then stop.</p>
+      <div class="def-line"><span class="tag tag--use">Job</span><div>Let the audience arrive at the truth themselves, roughly one beat before you'd have said it.</div></div>
+      <div class="def-line"><span class="tag tag--no">Fails</span><div>Explaining the theme. Every sentence after the truth lands dilutes it.</div></div>
+    </div>
+  </section>
+
+  <!-- 10 SLATE -->
+  <section id="s10">
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <div><h2>The slate</h2><p class="sec-sub">Lay out any story before you write a word of it</p></div>
+    </div>
+
+    <p class="lede">Fill this in and you'll know within ten minutes whether you have a story or an anecdote. Empty fields aren't failures — they're the exact diagnosis. Three or more blank and you don't have it yet.</p>
+
+    <div class="slate">
+      <div class="slate-top"><b>Story slate</b><span>16 fields · red = load-bearing</span></div>
+      <div class="fields">
+        <div class="f"><label>01 · Character</label><input data-f="Character" placeholder="Who this happens to"></div>
+        <div class="f"><label>02 · Displacement</label><p class="hint">Where don't they belong?</p><input data-f="Displacement" placeholder=""></div>
+
+        <div class="f"><label>03 · Want <i>●</i></label><p class="hint">External, concrete, winnable or losable</p><input data-f="Want" placeholder=""></div>
+        <div class="f"><label>04 · Misbelief</label><p class="hint">The false rule that invented the want</p><input data-f="Misbelief" placeholder=""></div>
+
+        <div class="f"><label>05 · Need</label><p class="hint">What would actually help — usually unknown to them</p><input data-f="Need" placeholder=""></div>
+        <div class="f"><label>06 · Stakes <i>●</i></label><p class="hint">Lost on failure. Specific and personal.</p><input data-f="Stakes" placeholder=""></div>
+
+        <div class="f"><label>07 · Urgency</label><p class="hint">Why today and not next month?</p><input data-f="Urgency" placeholder=""></div>
+        <div class="f"><label>08 · Opposition <i>●</i></label><p class="hint">The other force — with its own logic</p><input data-f="Opposition" placeholder=""></div>
+
+        <div class="f f--wide"><label>09 · Restraint <i>●</i></label><p class="hint">Why don't they just fix it? Mark whether it's imposed or chosen.</p><input data-f="Restraint" placeholder=""></div>
+
+        <div class="f"><label>10 · The break <i>●</i></label><p class="hint">What became irreversible</p><input data-f="Break" placeholder=""></div>
+        <div class="f"><label>11 · Commitment</label><p class="hint">The moment they choose to pursue</p><input data-f="Commitment" placeholder=""></div>
+
+        <div class="f f--wide"><label>12 · Escalation</label><p class="hint">Three attempts, each leaving them worse off than the last</p><textarea data-f="Escalation" rows="3" placeholder="1.&#10;2.&#10;3."></textarea></div>
+
+        <div class="f f--wide"><label>13 · Crisis <i>●</i></label><p class="hint">The dilemma. Two options, both costly. If one is obviously right, it isn't a dilemma.</p><input data-f="Crisis" placeholder=""></div>
+
+        <div class="f"><label>14 · Climax <i>●</i></label><p class="hint">The choice, and what it costs</p><input data-f="Climax" placeholder=""></div>
+        <div class="f"><label>15 · Change</label><p class="hint">Believed ___ → now believes ___</p><input data-f="Change" placeholder=""></div>
+
+        <div class="f f--wide"><label>16 · Truth <i>●</i></label><p class="hint">One sentence that could be false</p><input data-f="Truth" placeholder=""></div>
+
+        <div class="f f--wide"><label>Dominant register</label><p class="hint">One only — wonder, courage, sorrow, humour, longing, anger, fear, peace</p><input data-f="Register" placeholder=""></div>
+      </div>
+    </div>
+
+    <div class="slate-actions">
+      <button class="act" id="copy">Copy filled slate</button>
+      <button class="act ghost" id="clear">Clear</button>
+      <button class="act ghost" id="print">Print blank</button>
+    </div>
+    <p style="font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase">Nothing is saved — copy the slate out before you close this.</p>
+  </section>
+
+  <!-- 11 DIAGNOSTICS -->
+  <section id="s11">
+    <div class="sec-head">
+      <div class="sec-num">11</div>
+      <div><h2>Diagnostics</h2><p class="sec-sub">Symptom, cause, fix</p></div>
+    </div>
+
+    <p class="lede">When something feels wrong but you can't name it, the symptom is almost never the problem. Find the symptom below and read across.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Symptom</th><th>Actual cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Nothing seems to happen</td><td data-l="Cause">No irreversible break — events occur but the situation is restorable.</td><td class="fix" data-l="Fix">Find what can't go back, or invent it.</td></tr>
+        <tr><td>The middle drags</td><td data-l="Cause">The restraint broke early, or attempts repeat instead of escalating.</td><td class="fix" data-l="Fix">Hold the restraint longer. Make each attempt cost more than the last.</td></tr>
+        <tr><td>The character feels flat</td><td data-l="Cause">They're described, not revealed — no choice under cost.</td><td class="fix" data-l="Fix">Give them a decision where both options hurt.</td></tr>
+        <tr><td>The ending doesn't land</td><td data-l="Cause">The protagonist didn't act, or nothing was given up.</td><td class="fix" data-l="Fix">Make them choose, and charge them for it.</td></tr>
+        <tr><td>It feels preachy</td><td data-l="Cause">The truth is stated rather than demonstrated.</td><td class="fix" data-l="Fix">Delete the speech. Let the climax carry the argument.</td></tr>
+        <tr><td>It feels melodramatic</td><td data-l="Cause">Emotional display exceeds the stakes that earned it.</td><td class="fix" data-l="Fix">Raise the stakes, or lower the volume. Usually the second.</td></tr>
+        <tr><td>Can't get invested</td><td data-l="Cause">No stakes, or no vulnerability shown early.</td><td class="fix" data-l="Fix">Name what's lost on failure — specifically, in the first 10%.</td></tr>
+        <tr><td>It feels random</td><td data-l="Cause">Beats joined by "and then" rather than "but" or "therefore."</td><td class="fix" data-l="Fix">List the beats. Put "but" or "therefore" between each pair. Cut whatever won't take one.</td></tr>
+        <tr><td>The opposition is weak</td><td data-l="Cause">The other side has no legitimate case.</td><td class="fix" data-l="Fix">Write their argument as if you agreed with it. Then use that version.</td></tr>
+        <tr><td>Emotionally hollow</td><td data-l="Cause">The feeling was performed instead of arranged, or the audience was told what to feel.</td><td class="fix" data-l="Fix">Cut the instruction. Show the cause and the visible effect; let them do the rest.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p>Build order is always the same — character, want, restraint, break, escalation, cost, choice, change, truth. Flavour comes last, and only after the chassis holds.</p>
+  </footer>
+
+  </main>
+</div>
+</div>
+
+<div class="stripe"></div>
+
+<script>
+(function(){
+  // timeline → section
+  document.querySelectorAll('[data-go]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var t=document.querySelector(b.getAttribute('data-go'));
+      if(t) t.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
+
+  // scrollspy
+  var links=[].slice.call(document.querySelectorAll('.nav-list a'));
+  var secs=links.map(function(a){return document.querySelector(a.getAttribute('href'));});
+  function spy(){
+    var y=window.scrollY+140,cur=0;
+    secs.forEach(function(s,i){ if(s && s.offsetTop<=y) cur=i; });
+    links.forEach(function(a,i){ a.classList.toggle('on',i===cur); });
+  }
+  var tick=false;
+  window.addEventListener('scroll',function(){
+    if(tick) return; tick=true;
+    requestAnimationFrame(function(){ spy(); tick=false; });
+  },{passive:true});
+  spy();
+
+  // slate
+  var fields=[].slice.call(document.querySelectorAll('[data-f]'));
+  document.getElementById('copy').addEventListener('click',function(){
+    var out=['STORY SLATE',''];
+    fields.forEach(function(f){
+      if(f.value.trim()) out.push(f.getAttribute('data-f').toUpperCase()+': '+f.value.trim());
+    });
+    var txt=out.join('\n');
+    var btn=this;
+    function done(ok){
+      btn.textContent = ok ? 'Copied' : 'Select and copy';
+      setTimeout(function(){btn.textContent='Copy filled slate';},1600);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){done(true);},function(){done(false);});
+    } else { done(false); }
+  });
+  document.getElementById('clear').addEventListener('click',function(){
+    if(confirm('Clear every field?')) fields.forEach(function(f){f.value='';});
+  });
+  document.getElementById('print').addEventListener('click',function(){ window.print(); });
+})();
+</script>
